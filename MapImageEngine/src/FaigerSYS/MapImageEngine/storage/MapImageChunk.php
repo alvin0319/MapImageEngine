@@ -1,39 +1,38 @@
 <?php
 namespace FaigerSYS\MapImageEngine\storage;
 
+use pocketmine\entity\EntityFactory;
 use pocketmine\utils\Binary;
 use pocketmine\utils\BinaryStream;
-
-use pocketmine\entity\Entity;
 
 use FaigerSYS\MapImageEngine\MapImageEngine;
 
 use pocketmine\utils\Color;
 
-use pocketmine\network\mcpe\protocol\BatchPacket;
 use pocketmine\network\mcpe\protocol\ClientboundMapItemDataPacket;
 use FaigerSYS\MapImageEngine\packet\CustomClientboundMapItemDataPacket;
 
 class MapImageChunk {
-	
+
 	/**
 	 * Current cache API version
 	 */
 	const CACHE_API = 3;
-	
+
 	/** @var int */
 	private $width;
 	private $height;
-	
+
 	/** @var int */
 	private $map_id;
-	
+
 	/** @var BinaryStream */
 	public $data;
-	
+
 	/**
-	 * @param int    $width
-	 * @param int    $height
+	 * @param int $width
+	 * @param int $height
+	 * @param int $map_id
 	 * @param string $data
 	 */
 	public function __construct(int $width, int $height, string $data, int $map_id = null) {
@@ -43,59 +42,61 @@ class MapImageChunk {
 		if ($width * $height * 4 !== strlen($data)) {
 			throw new \InvalidArgumentException('Given data does not match with given width and height');
 		}
-		
+
 		$this->width = $width;
 		$this->height = $height;
-		$this->map_id = $map_id ?? Entity::$entityCount++;
+		$this->map_id = $map_id ?? EntityFactory::nextRuntimeId();
 		$this->data = new BinaryStream($data);
 	}
-	
+
 	/**
 	 * Returns map image chunk map ID
 	 *
 	 * @return int
 	 */
-	public function getMapId() : int {
+	public function getMapId(): int {
 		return $this->map_id;
 	}
-	
+
 	/**
 	 * Sets map image chunk map ID
-	 *
-	 * @return int
+	 * @param int $map_id
 	 */
 	public function setMapId(int $map_id) {
 		$this->map_id = $map_id;
 	}
-	
+
 	/**
 	 * Returns map image chunk width
 	 *
 	 * @return int
 	 */
-	public function getWidth() : int {
+	public function getWidth(): int {
 		return $this->width;
 	}
-	
+
 	/**
 	 * Returns map image chunk height
 	 *
 	 * @return int
 	 */
-	public function getHeight() : int {
+	public function getHeight(): int {
 		return $this->height;
 	}
-	
+
 	/**
 	 * Returns RGBA color at specified position
-	 *
+	 * @param int $x
+	 * @param int $y
 	 * @return int
 	 */
-	public function getRGBA(int $x, int $y) : int {
-		$this->data->offset = $this->getStartOffset($x, $y);
+	public function getRGBA(int $x, int $y): int {
+
+		$this->data->setOffset($this->getStartOffset($x, $y));
+
 		return (int) $this->data->getInt();
 	}
-	
+
 	/**
 	 * Sets RBGA color at specified position
 	 *
@@ -105,22 +106,32 @@ class MapImageChunk {
 	 */
 	public function setRGBA(int $x, int $y, int $color) {
 		$pos = $this->getStartOffset($x, $y);
-		$this->data->buffer{$pos++} = chr($color       & 0xff);
-		$this->data->buffer{$pos++} = chr($color >> 8  & 0xff);
-		$this->data->buffer{$pos++} = chr($color >> 16 & 0xff);
-		$this->data->buffer{$pos}   = chr($color >> 24 & 0xff);
+		//$this->data->buffer{$pos++} = chr($color       & 0xff);
+		//$this->data->buffer{$pos++} = chr($color >> 8  & 0xff);
+		//$this->data->buffer{$pos++} = chr($color >> 16 & 0xff);
+		//$this->data->buffer{$pos}   = chr($color >> 24 & 0xff);
+
+		$buffer = $this->data->getBuffer();
+		$buffer{$pos++} = chr($color & 0xff);
+		$buffer{$pos++} = chr($color >> 8 & 0xff);
+		$buffer{$pos++} = chr($color >> 16 & 0xff);
+		$buffer{$pos} = chr($color >> 24 & 0xff);
+
+		$this->data->setBuffer($buffer);
+
 	}
-	
+
 	/**
 	 * Returns ABGR color at specified position
-	 *
+	 * @param int $x
+	 * @param int $y
 	 * @return int
 	 */
-	public function getABGR(int $x, int $y) : int {
-		$this->data->offset = $this->getStartOffset($x, $y);
+	public function getABGR(int $x, int $y): int {
+		$this->data->setOffset($this->getStartOffset($x, $y));
 		return (int) $this->data->getLInt() & 0xffffffff;
 	}
-	
+
 	/**
 	 * Sets ABGR color at specified position
 	 *
@@ -130,20 +141,28 @@ class MapImageChunk {
 	 */
 	public function setABGR(int $x, int $y, int $color) {
 		$pos = $this->getStartOffset($x, $y);
-		$this->data->buffer{$pos++} = chr($color >> 24 & 0xff);
-		$this->data->buffer{$pos++} = chr($color >> 16 & 0xff);
-		$this->data->buffer{$pos++} = chr($color >> 8  & 0xff);
-		$this->data->buffer{$pos}   = chr($color       & 0xff);
+		//$this->data->buffer{$pos++} = chr($color >> 24 & 0xff);
+		//$this->data->buffer{$pos++} = chr($color >> 16 & 0xff);
+		//$this->data->buffer{$pos++} = chr($color >> 8  & 0xff);
+		//$this->data->buffer{$pos}   = chr($color       & 0xff);
+
+		$buffer = $this->data->getBuffer();
+		$buffer{$pos++} = chr($color >> 24 & 0xff);
+		$buffer{$pos++} = chr($color >> 16 & 0xff);
+		$buffer{$pos++} = chr($color >> 8 & 0xff);
+		$buffer{$pos} = chr($color & 0xff);
+
+		$this->data->setBuffer($buffer);
 	}
-	
+
 	/**
 	 * Returns array of Color objects
 	 *
 	 * @return array
 	 */
-	public function toArrayColor() : array {
+	public function toArrayColor(): array {
 		$colors = [];
-		$this->data->offset = 0;
+		$this->data->setOffset(0);
 		for ($y = 0; $y < $this->height; $y++) {
 			for ($x = 0; $x < $this->width; $x++) {
 				$color = $this->data->getInt();
@@ -152,78 +171,75 @@ class MapImageChunk {
 		}
 		return $colors;
 	}
-	
+
 	/**
 	 * Returns RGBA colors array
 	 *
 	 * @return array
 	 */
-	public function toArrayRGBA() : array {
+	public function toArrayRGBA(): array {
 		$colors = [];
-		$this->data->offset = 0;
+		$this->data->setOffset(0);
 		for ($y = 0; $y < $this->height; $y++) {
 			for ($x = 0; $x < $this->width; $x++) {
 				$colors[$y][$x] = (int) $this->data->getInt();
 			}
 		}
-		
+
 		return $colors;
 	}
-	
+
 	/**
 	 * Returns pretty RGBA colors array
 	 *
 	 * @return array
 	 */
-	public function toArrayPrettyRGBA() : array {
+	public function toArrayPrettyRGBA(): array {
 		$colors = [];
-		$this->data->offset = 0;
+		$this->data->setOffset(0);
 		for ($y = 0; $y < $this->height; $y++) {
 			for ($x = 0; $x < $this->width; $x++) {
 				$colors[$y][$x] = [
-					'r' => $this->data->getByte(),
-					'g' => $this->data->getByte(),
-					'b' => $this->data->getByte(),
-					'a' => $this->data->getByte()
+						'r' => $this->data->getByte(),
+						'g' => $this->data->getByte(),
+						'b' => $this->data->getByte(),
+						'a' => $this->data->getByte()
 				];
 			}
 		}
-		
+
 		return $colors;
 	}
-	
+
 	/**
 	 * Returns ABGR colors array
 	 *
 	 * @return array
 	 */
-	public function toArrayABGR() : array {
+	public function toArrayABGR(): array {
 		$colors = [];
-		$this->data->offset = 0;
+		$this->data->setOffset(0);
 		for ($y = 0; $y < $this->height; $y++) {
 			for ($x = 0; $x < $this->width; $x++) {
 				$colors[$y][$x] = $this->data->getLInt() & 0xffffffff;
 			}
 		}
-		
+
 		return $colors;
 	}
-	
+
 	/**
 	 * Returns RGBA colors binary
 	 *
 	 * @return string
 	 */
-	public function toBinaryRGBA() : string {
-		return $this->data->buffer;
+	public function toBinaryRGBA(): string {
+		return $this->data->getBuffer();
 	}
-	
+
 	/**
 	 * Generates map image packet
-	 *
-	 * @param int  $compression_level
-	 * @param int  $map_id
-	 * @param bool $use_cache
+	 * @param int $map_id
 	 *
 	 * @return ClientboundMapItemDataPacket
 	 */
@@ -236,12 +252,10 @@ class MapImageChunk {
 		$pk->colors = $this->toArrayColor();
 		return $pk;
 	}
-	
+
 	/**
 	 * Generates custom map image packet
-	 *
-	 * @param int  $compression_level
-	 * @param int  $map_id
+	 * @param int $map_id
 	 * @param bool $use_cache
 	 *
 	 * @return CustomClientboundMapItemDataPacket
@@ -252,17 +266,17 @@ class MapImageChunk {
 		$pk->scale = 0;
 		$pk->width = $this->width;
 		$pk->height = $this->height;
-		
+
 		$colors = null;
 		$generate_cache = false;
-		
+
 		if ($use_cache) {
-			$cache_hash = hash('md5', $this->width . '.' . $this->height . '.' . hash('md5', $this->data->buffer));
+			$cache_hash = hash('md5', $this->width . '.' . $this->height . '.' . hash('md5', $this->data->getBuffer()));
 			$cache_path = MapImageEngine::getInstance()->getDataFolder() . 'cache/' . $cache_hash;
 			$generate_cache = true;
 			if (file_exists($cache_path) && is_file($cache_path)) {
 				$cache_buffer = new BinaryStream(file_get_contents($cache_path));
-				
+
 				$cache_api = $cache_buffer->getInt();
 				if ($cache_api === self::CACHE_API) {
 					$colors = $cache_buffer->get(true);
@@ -270,29 +284,29 @@ class MapImageChunk {
 				}
 			}
 		}
-		
+
 		if ($colors === null) {
 			$colors = CustomClientboundMapItemDataPacket::prepareColors($this->toArrayABGR(), $this->width, $this->height);
 		}
-		
+
 		if ($generate_cache) {
 			$cache_buffer = new BinaryStream;
 			$cache_buffer->putInt(self::CACHE_API);
 			$cache_buffer->put($colors);
-			
-			file_put_contents($cache_path, $cache_buffer->buffer);
+
+			file_put_contents($cache_path, $cache_buffer->getBuffer());
 		}
-		
+
 		$pk->colors = $colors;
-		
+
 		return $pk;
 	}
-	
+
 	/**
 	 * Creates a new map image chunk from the RGBA color array
 	 *
-	 * @param int   $width
-	 * @param int   $height
+	 * @param int $width
+	 * @param int $height
 	 * @param array $colors
 	 *
 	 * @return MapImageChunk
@@ -301,27 +315,27 @@ class MapImageChunk {
 		if ($width < 0 || $height < 0) {
 			throw new \InvalidArgumentException('Width/height must be greater than 0');
 		}
-		
+
 		$data = new BinaryStream;
-		
+
 		for ($y = 0; $y < $height; $y++) {
 			for ($x = 0; $x < $width; $x++) {
 				if (!is_int($colors[$y][$x] ?? null)) {
 					throw new \InvalidArgumentException('Color is corrupted on [X: ' . $x . ', Y: ' . $y . ']');
 				}
-				
+
 				$data->putInt($colors[$y][$x]);
 			}
 		}
-		
-		return new MapImageChunk($width, $height, $data->buffer);
+
+		return new MapImageChunk($width, $height, $data->getBuffer());
 	}
-	
+
 	/**
 	 * Creates a new map image chunk from the ABGR colors array
 	 *
-	 * @param int   $width
-	 * @param int   $height
+	 * @param int $width
+	 * @param int $height
 	 * @param array $colors
 	 *
 	 * @return MapImageChunk
@@ -330,23 +344,23 @@ class MapImageChunk {
 		if ($width < 0 || $height < 0) {
 			throw new \InvalidArgumentException('Width/height must be greater than 0');
 		}
-		
+
 		$data = new BinaryStream;
-		
+
 		for ($y = 0; $y < $height; $y++) {
 			for ($x = 0; $x < $width; $x++) {
 				if (!is_int($colors[$y][$x] ?? null)) {
 					throw new \InvalidArgumentException('Color is corrupted on [X: ' . $x . ', Y: ' . $y . ']');
 				}
-				
+
 				$data->putLInt($colors[$y][$x]);
 			}
 		}
-		
-		return new MapImageChunk($width, $height, $data->buffer);
+
+		return new MapImageChunk($width, $height, $data->getBuffer());
 	}
-	
-	
+
+
 	/**
 	 * Creates a new map image chunk with the specified color
 	 *
@@ -360,11 +374,11 @@ class MapImageChunk {
 		if ($width < 0 || $height < 0) {
 			throw new \InvalidArgumentException('Width/height must be greater than 0');
 		}
-		
+
 		return new MapImageChunk($width, $height, str_repeat(Binary::writeInt($fill_color), $width * $height));
 	}
-	
-	private function getStartOffset(int $x, int $y) : int {
+
+	private function getStartOffset(int $x, int $y): int {
 		if ($x < 0 || $y < 0) {
 			throw new \InvalidArgumentException('X/Y must be greater than 0');
 		}
@@ -374,12 +388,12 @@ class MapImageChunk {
 		if ($y >= $this->height) {
 			throw new \InvalidArgumentException('Y cannot be greater than height');
 		}
-		
+
 		return ($y * $this->width) + $x;
 	}
-	
+
 	public function __clone() {
-		$this->map_id = Entity::$entityCount++;
+		$this->map_id = EntityFactory::nextRuntimeId();
 	}
-	
+
 }

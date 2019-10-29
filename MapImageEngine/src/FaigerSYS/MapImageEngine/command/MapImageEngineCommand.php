@@ -1,11 +1,11 @@
 <?php
 namespace FaigerSYS\MapImageEngine\command;
 
+use pocketmine\block\Block;
 use pocketmine\utils\TextFormat as CLR;
 
-use pocketmine\Player;
+use pocketmine\player\Player;
 use pocketmine\command\CommandSender;
-use pocketmine\command\ConsoleCommandSender;
 
 use pocketmine\command\Command;
 use pocketmine\command\PluginIdentifiableCommand;
@@ -18,36 +18,36 @@ use pocketmine\event\player\PlayerQuitEvent;
 
 use pocketmine\math\Vector3;
 
-use pocketmine\tile\ItemFrame;
+use pocketmine\block\ItemFrame;
 
 use FaigerSYS\MapImageEngine\MapImageEngine;
 use FaigerSYS\MapImageEngine\item\FilledMap;
 use FaigerSYS\MapImageEngine\TranslateStrings as TS;
 
 class MapImageEngineCommand extends Command implements PluginIdentifiableCommand, Listener {
-	
+
 	const MSG_PREFIX = CLR::BOLD . CLR::GOLD . '[' . CLR::RESET . CLR::GREEN . 'MIE' . CLR::BOLD . CLR::GOLD . ']' . CLR::RESET . CLR::GRAY . ' ';
-	
+
 	/** @var array */
 	private $cache = [];
-	
+
 	public function __construct() {
 		$this->getPlugin()->getServer()->getPluginManager()->registerEvents($this, $this->getPlugin());
-		
+
 		parent::__construct('mapimageengine', TS::translate('command.desc'), null, ['mie']);
 		$this->setPermission('mapimageengine');
 	}
-	
+
 	public function execute(CommandSender $sender, string $label, array $args) {
 		if (!$this->testPermission($sender)) {
 			return;
 		}
-		
+
 		if (!$sender instanceof Player) {
 			$sender->sendMessage(self::MSG_PREFIX . TS::translate('command.in-game'));
 			return;
 		}
-		
+
 		$cmd = array_shift($args);
 		switch ($cmd) {
 			case 'list':
@@ -59,15 +59,15 @@ class MapImageEngineCommand extends Command implements PluginIdentifiableCommand
 					foreach ($list as $name => $image) {
 						$w = $image->getBlocksWidth();
 						$h = $image->getBlocksHeight();
-						
-						$new_list[] = $name . CLR::RESET . ' ' . CLR::AQUA  . '(' . CLR::DARK_GREEN . $w . CLR::AQUA . 'x'.  CLR::DARK_GREEN . $h . CLR::AQUA . ')';
+
+						$new_list[] = $name . CLR::RESET . ' ' . CLR::AQUA . '(' . CLR::DARK_GREEN . $w . CLR::AQUA . 'x' . CLR::DARK_GREEN . $h . CLR::AQUA . ')';
 					}
-					
+
 					$list = CLR::WHITE . CLR::ITALIC . implode($new_list, CLR::GRAY . ', ' . CLR::WHITE . CLR::ITALIC) . CLR::GRAY;
 					$sender->sendMessage(self::MSG_PREFIX . TS::translate('command.list') . $list);
 				}
 				break;
-			
+
 			case 'place':
 				$image_name = (string) array_shift($args);
 				if (!strlen($image_name)) {
@@ -81,19 +81,19 @@ class MapImageEngineCommand extends Command implements PluginIdentifiableCommand
 						$sender->sendMessage(self::MSG_PREFIX . TS::translate('command.place.not-found', $image_name));
 					} else {
 						$this->cache[$sender->getName()] = [
-							'image_hash' => $image->getHashedUUID(),
-							'pretty'     => in_array('pretty', $args),
-							'auto'       => in_array('auto', $args),
-							'placed'     => 0,
-							'x_count'    => $image->getBlocksWidth(),
-							'y_count'    => $image->getBlocksHeight()
+								'image_hash' => $image->getHashedUUID(),
+								'pretty' => in_array('pretty', $args),
+								'auto' => in_array('auto', $args),
+								'placed' => 0,
+								'x_count' => $image->getBlocksWidth(),
+								'y_count' => $image->getBlocksHeight()
 						];
-						
+
 						$this->processPlaceMessage($sender);
 					}
 				}
 				break;
-			
+
 			case 'exit':
 				$name = $sender->getName();
 				if (isset($this->cache[$name])) {
@@ -103,7 +103,7 @@ class MapImageEngineCommand extends Command implements PluginIdentifiableCommand
 					$sender->sendMessage(self::MSG_PREFIX . TS::translate('command.exit.not-allowed'));
 				}
 				break;
-			
+
 			default:
 				$sender->sendMessage(self::MSG_PREFIX . TS::translate('command.usage'));
 				$sender->sendMessage(CLR::GRAY . '  /' . $label . ' list - ' . TS::translate('command.desc.list'));
@@ -111,44 +111,49 @@ class MapImageEngineCommand extends Command implements PluginIdentifiableCommand
 				$sender->sendMessage(CLR::GRAY . '  /' . $label . ' exit - ' . TS::translate('command.desc.exit'));
 		}
 	}
-	
+
 	/**
+	 * @param PlayerInteractEvent $e
 	 * @priority LOW
-	 * @ignoreCancelled true
+	 * @handleCancelled true
 	 */
 	public function onTouch(PlayerInteractEvent $e) {
 		if ($e->getAction() !== PlayerInteractEvent::RIGHT_CLICK_BLOCK) {
 			return;
 		}
-		
+
 		$player = $e->getPlayer();
 		$name = $player->getName();
-		
+
 		if (isset($this->cache[$name])) {
 			$block = $e->getBlock();
-			$level = $block->getLevel();
-			
-			$frame = $level->getTile($block);
+			$level = $block->getPos()->getWorld();
+
+			$frame = $level->getTile($block->getPos());
 			if (!($frame instanceof ItemFrame)) {
 				$player->sendMessage(self::MSG_PREFIX . TS::translate('command.place.not-frame'));
 			} else {
 				$data = &$this->cache[$name];
-				
+
 				if ($data['auto']) {
 					if (!isset($data['p1'])) {
 						$data['p1'] = $block;
 						$this->processPlaceMessage($player);
 					} else {
+						/**
+						 * @var Block $p1
+						 * @var Block $p2
+						 */
 						$p1 = $data['p1'];
 						$p2 = $block;
-						
-						$x1 = $p1->getX();
-						$y1 = $p1->getY();
-						$z1 = $p1->getZ();
-						$x2 = $p2->getX();
-						$y2 = $p2->getY();
-						$z2 = $p2->getZ();
-						
+
+						$x1 = $p1->getPos()->getX();
+						$y1 = $p1->getPos()->getY();
+						$z1 = $p1->getPos()->getZ();
+						$x2 = $p2->getPos()->getX();
+						$y2 = $p2->getPos()->getY();
+						$z2 = $p2->getPos()->getZ();
+
 						if ($y1 < $y2) {
 							$player->sendMessage(self::MSG_PREFIX . TS::translate('command.place.invalid-upper-corner'));
 						} else if ($y1 - $y2 + 1 !== $data['y_count']) {
@@ -168,7 +173,7 @@ class MapImageEngineCommand extends Command implements PluginIdentifiableCommand
 							} else {
 								$player->sendMessage(self::MSG_PREFIX . TS::translate('command.place.not-flat'));
 							}
-							
+
 							if (abs($to - $from) + 1 !== $data['x_count']) {
 								$player->sendMessage(self::MSG_PREFIX . TS::translate('command.place.width-not-match'));
 							} else if ($a !== null) {
@@ -178,34 +183,36 @@ class MapImageEngineCommand extends Command implements PluginIdentifiableCommand
 									$x_b++;
 									for ($y = $y1; $y >= $y2; $y--) {
 										$y_b++;
-										
+
 										$frame = $level->getTile(new Vector3($x, $y, $z));
 										if (!($frame instanceof ItemFrame)) {
 											$player->sendMessage(self::MSG_PREFIX . TS::translate('command.place.no-frames'));
 											break 2;
 										}
-										
+
 										$map = new FilledMap();
 										$map->setImageData($data['image_hash'], $x_b, $y_b);
-										
-										$frame->setItem($map);
+
+										$frame->setFramedItem($map);
+										$frame->getPos()->getWorld()->setBlock($frame->getPos(), $frame); // should do this...lol
 									}
 								}
 								$player->sendMessage(self::MSG_PREFIX . TS::translate('command.place.success'));
 							}
 						}
-						
+
 						unset($this->cache[$name]);
 					}
 				} else {
 					$x = $data['placed'] % $data['x_count'];
 					$y = floor($data['placed'] / $data['x_count']);
-					
+
 					$map = new FilledMap();
 					$map->setImageData($data['image_hash'], $x, $y);
-					
-					$frame->setItem($map);
-					
+
+					$frame->setFramedItem($map);
+					$frame->getPos()->getWorld()->setBlock($frame->getPos(), $frame);
+
 					if (++$data['placed'] === ($data['x_count'] * $data['y_count'])) {
 						$player->sendMessage(self::MSG_PREFIX . TS::translate('command.place.success'));
 						unset($this->cache[$name]);
@@ -214,22 +221,22 @@ class MapImageEngineCommand extends Command implements PluginIdentifiableCommand
 					}
 				}
 			}
-			
+
 			$e->setCancelled(true);
 		}
 	}
-	
+
 	public function onQuit(PlayerQuitEvent $e) {
 		unset($this->cache[$e->getPlayer()->getName()]);
 	}
-	
+
 	private function processPlaceMessage(Player $player) {
 		$name = $player->getName();
 		$data = &$this->cache[$name];
-		
+
 		$player->sendMessage('');
 		$player->sendMessage(self::MSG_PREFIX . TS::translate('command.place.placing'));
-		
+
 		if ($data['auto']) {
 			if (!isset($data['p1'])) {
 				$player->sendMessage(CLR::GRAY . TS::translate('command.place.click-top-left'));
@@ -238,29 +245,32 @@ class MapImageEngineCommand extends Command implements PluginIdentifiableCommand
 			}
 		} else {
 			$player->sendMessage(CLR::GRAY . TS::translate('command.place.placing-info'));
-			
+
 			$x = (int) $data['placed'] % $data['x_count'];
 			$y = (int) ($data['placed'] / $data['x_count']);
-			
+
 			if ($data['pretty']) {
 				$block = "\xe2\xac\x9b";
-				
+
 				for ($y_b = 0; $y_b < $data['y_count']; $y_b++) {
 					$line = CLR::WHITE;
 					for ($x_b = 0; $x_b < $data['x_count']; $x_b++) {
 						$line .= ($x_b === $x && $y_b === $y) ? CLR::GREEN . $block . CLR::WHITE : $block;
 					}
-					
+
 					$player->sendMessage($line);
 				}
 			}
-			
+
 			$player->sendMessage(CLR::GRAY . TS::translate('command.place.click', $x + 1, $y + 1));
 		}
 	}
-	
-	public function getPlugin() : Plugin {
+
+	/**
+	 * @return MapImageEngine
+	 */
+	public function getPlugin(): Plugin {
 		return MapImageEngine::getInstance();
 	}
-	
+
 }
